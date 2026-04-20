@@ -11,7 +11,7 @@ export type TelemetryNormalized = {
 };
 
 export async function getLatestTelemetry(): Promise<TelemetryNormalized[]> {
-  const res = await apiClient.get("/api/telemetry/latest");
+  const res = await apiClient.get("/telemetry/latest");
 
   const data = unwrapApiResponse<any[]>(res.data);
 

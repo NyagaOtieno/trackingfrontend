@@ -15,6 +15,7 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   isAuthenticated: boolean;
+
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
@@ -30,51 +31,62 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       isAuthenticated: !!getStoredToken(),
 
-     login: async (email, password) => {
-  set({ isLoading: true, error: null });
+      // =========================
+      // LOGIN
+      // =========================
+      login: async (email, password) => {
+        set({ isLoading: true, error: null });
 
-  try {
-    // send 'login' instead of 'email' to match backend
-    const result = await loginRequest({ login: email, password });
+        try {
+          // IMPORTANT: only send email as "login" if backend expects it
+          const result = await loginRequest({
+            login: email.trim(),
+            password,
+          });
 
-    setStoredToken(result.token);
+          const token = result.token;
 
-    set({
-      user: result.user ?? null,
-      token: result.token,
-      isLoading: false,
-      error: null,
-      isAuthenticated: true,
-    });
+          setStoredToken(token);
 
-    // Fetch /me if user object missing
-    if (!result.user) {
-      try {
-        const me = await fetchMe();
-        set({ user: me });
-      } catch {
-        // ignore
-      }
-    }
+          set({
+            user: result.user ?? null,
+            token,
+            isLoading: false,
+            error: null,
+            isAuthenticated: true,
+          });
 
-    return true;
-  } catch (error) {
-    clearStoredSession();
+          // fetch user if missing
+          if (!result.user) {
+            try {
+              const me = await fetchMe();
+              set({ user: me });
+            } catch {
+              // ignore
+            }
+          }
 
-    set({
-      user: null,
-      token: null,
-      isLoading: false,
-      error: getApiMessage(error, "Login failed"),
-      isAuthenticated: false,
-    });
+          return true;
+        } catch (error) {
+          clearStoredSession();
 
-    return false;
-  }
-},
+          set({
+            user: null,
+            token: null,
+            isLoading: false,
+            error: getApiMessage(error, "Login failed"),
+            isAuthenticated: false,
+          });
 
+          return false;
+        }
+      },
+
+      // =========================
+      // HYDRATE SESSION
+      // =========================
       hydrateUser: async () => {
-        const token = get().token || getStoredToken();
+        const token = getStoredToken();
 
         if (!token) {
           set({
@@ -110,6 +122,9 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      // =========================
+      // LOGOUT
+      // =========================
       logout: () => {
         clearStoredSession();
 

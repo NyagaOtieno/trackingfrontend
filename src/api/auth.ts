@@ -9,10 +9,17 @@ import type {
 
 type LoginApiResponse = ApiEnvelope<LoginResponseData> | LoginResponseData;
 
+// =========================
+// LOGIN
+// =========================
 export async function loginRequest(
   payload: LoginPayload
 ): Promise<LoginResponseData> {
-  const response = await apiClient.post<LoginApiResponse>("/api/auth/login", payload);
+  const response = await apiClient.post<LoginApiResponse>(
+    "/auth/login",
+    payload
+  );
+
   const data = unwrapApiResponse<LoginResponseData>(response.data);
 
   return {
@@ -21,7 +28,15 @@ export async function loginRequest(
   };
 }
 
+// =========================
+// GET CURRENT USER
+// =========================
 export async function fetchMe(): Promise<AuthUser> {
-  const response = await apiClient.get<ApiEnvelope<AuthUser> | AuthUser>("/api/auth/me");
-  return normalizeAuthUser(unwrapApiResponse<AuthUser>(response.data)) as AuthUser;
+  const response = await apiClient.get<ApiEnvelope<AuthUser> | AuthUser>(
+    "/auth/me"
+  );
+
+  return normalizeAuthUser(
+    unwrapApiResponse<AuthUser>(response.data)
+  ) as AuthUser;
 }

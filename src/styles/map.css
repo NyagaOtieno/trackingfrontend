@@ -1,0 +1,15 @@
+.fleet-marker-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.fleet-marker {
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  text-align: center;
+  white-space: nowrap;
+}

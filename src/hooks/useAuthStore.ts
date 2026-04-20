@@ -1,0 +1,136 @@
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import { loginRequest, fetchMe } from "@/api/auth";
+import {
+  clearStoredSession,
+  getApiMessage,
+  getStoredToken,
+  setStoredToken,
+} from "@/api/client";
+import type { AuthUser } from "@/types/auth";
+
+interface AuthState {
+  user: AuthUser | null;
+  token: string | null;
+  isLoading: boolean;
+  error: string | null;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  clearError: () => void;
+  hydrateUser: () => Promise<void>;
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      token: getStoredToken(),
+      isLoading: false,
+      error: null,
+      isAuthenticated: !!getStoredToken(),
+
+     login: async (email, password) => {
+  set({ isLoading: true, error: null });
+
+  try {
+    // send 'login' instead of 'email' to match backend
+    const result = await loginRequest({ login: email, password });
+
+    setStoredToken(result.token);
+
+    set({
+      user: result.user ?? null,
+      token: result.token,
+      isLoading: false,
+      error: null,
+      isAuthenticated: true,
+    });
+
+    // Fetch /me if user object missing
+    if (!result.user) {
+      try {
+        const me = await fetchMe();
+        set({ user: me });
+      } catch {
+        // ignore
+      }
+    }
+
+    return true;
+  } catch (error) {
+    clearStoredSession();
+
+    set({
+      user: null,
+      token: null,
+      isLoading: false,
+      error: getApiMessage(error, "Login failed"),
+      isAuthenticated: false,
+    });
+
+    return false;
+  }
+},
+
+      hydrateUser: async () => {
+        const token = get().token || getStoredToken();
+
+        if (!token) {
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+          });
+          return;
+        }
+
+        set({ isLoading: true });
+
+        try {
+          const me = await fetchMe();
+
+          set({
+            user: me,
+            token,
+            isLoading: false,
+            error: null,
+            isAuthenticated: true,
+          });
+        } catch (error) {
+          clearStoredSession();
+
+          set({
+            user: null,
+            token: null,
+            isLoading: false,
+            error: getApiMessage(error, "Session expired"),
+            isAuthenticated: false,
+          });
+        }
+      },
+
+      logout: () => {
+        clearStoredSession();
+
+        set({
+          user: null,
+          token: null,
+          isLoading: false,
+          error: null,
+          isAuthenticated: false,
+        });
+      },
+
+      clearError: () => set({ error: null }),
+    }),
+    {
+      name: "fleet-auth",
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
+  )
+);

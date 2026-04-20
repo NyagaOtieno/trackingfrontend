@@ -1,0 +1,355 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 220 20% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 20% 10%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 10% 46%;
+    --accent: 0 60% 94%;
+    --accent-foreground: 0 72% 35%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 0 72% 51%;
+    --radius: 0.75rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 220 10% 30%;
+    --sidebar-primary: 0 72% 51%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 60% 94%;
+    --sidebar-accent-foreground: 0 72% 35%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 0 72% 51%;
+  }
+
+  .dark {
+    --background: 224 30% 8%;
+    --foreground: 210 20% 92%;
+    --card: 224 25% 11%;
+    --card-foreground: 210 20% 92%;
+    --popover: 224 25% 11%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 224 20% 16%;
+    --secondary-foreground: 210 20% 85%;
+    --muted: 224 20% 14%;
+    --muted-foreground: 215 15% 55%;
+    --accent: 0 40% 14%;
+    --accent-foreground: 0 72% 60%;
+    --destructive: 40 80% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 224 15% 18%;
+    --input: 224 15% 18%;
+    --ring: 0 72% 51%;
+    --radius: 0.75rem;
+    --sidebar-background: 224 28% 10%;
+    --sidebar-foreground: 210 15% 70%;
+    --sidebar-primary: 0 72% 51%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 30% 12%;
+    --sidebar-accent-foreground: 0 72% 55%;
+    --sidebar-border: 224 15% 16%;
+    --sidebar-ring: 0 72% 51%;
+
+    --fleet-online: 160 84% 39%;
+    --fleet-offline: 0 60% 50%;
+    --fleet-idle: 40 80% 55%;
+    --fleet-card-hover: 224 20% 14%;
+    --fleet-card-selected: 0 30% 12%;
+    --fleet-map-bg: 224 30% 6%;
+    --fleet-topbar: 224 28% 10%;
+    --fleet-drawer: 224 25% 11%;
+    --fleet-glow: 0 72% 51%;
+    --fleet-speed: 200 80% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply dark;
+    height: 100%;
+    width: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  #root {
+    height: 100%;
+    width: 100%;
+  }
+}
+
+/* Leaflet core sizing */
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  background: #dfe7ef;
+}
+
+/* Fix Tailwind/global image rules breaking Leaflet tiles and markers */
+.leaflet-container img,
+.leaflet-container .leaflet-tile,
+.leaflet-container .leaflet-marker-icon,
+.leaflet-container .leaflet-marker-shadow,
+.leaflet-container .leaflet-pane img {
+  max-width: none !important;
+  max-height: none !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+/* Keep controls above tiles, but below app panels */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-control-container {
+  z-index: 400;
+}
+
+.fleet-vehicle-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.fleet-vehicle-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.fleet-vehicle-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.fleet-vehicle-rotator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center;
+  transition: transform 0.25s ease;
+}
+
+.fleet-vehicle-svg {
+  display: block;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.28));
+}
+
+.fleet-vehicle-reg {
+  margin-bottom: 3px;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  background: rgba(17, 24, 39, 0.9);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.fleet-vehicle-speed {
+  margin-top: 3px;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #111827;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+@keyframes fleetPulse {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.45;
+  }
+  70% {
+    transform: scale(1.28);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.28);
+    opacity: 0;
+  }
+}
+
+.fleet-vehicle-pulse::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 9999px;
+  background: rgba(34, 197, 94, 0.25);
+  animation: fleetPulse 1.8s ease-out infinite;
+  z-index: 0;
+}
+
+.fleet-tooltip {
+  background: #0f172a;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.fleet-tooltip::before {
+  border-top-color: #0f172a !important;
+}
+/* Leaflet control styling */
+.dark .leaflet-control-zoom a {
+  background: hsl(224 25% 11%) !important;
+  color: hsl(210 20% 92%) !important;
+  border-color: hsl(224 15% 18%) !important;
+}
+
+.dark .leaflet-control-attribution {
+  background: hsl(224 25% 11% / 0.8) !important;
+  color: hsl(215 15% 55%) !important;
+}
+
+.dark .leaflet-popup-content-wrapper {
+  background: hsl(224 25% 11%);
+  color: hsl(210 20% 92%);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 40px -10px hsl(0 0% 0% / 0.5);
+}
+
+.dark .leaflet-popup-tip {
+  background: hsl(224 25% 11%);
+}
+
+/* Vehicle marker pulse */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+.marker-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: hsl(0 72% 51% / 0.4);
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(224 15% 22%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(224 15% 30%);
+}
+
+/* Reconnecting banner */
+@keyframes slide-down {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.reconnecting-banner {
+  animation: slide-down 0.3s ease-out;
+}
+.fleet-popup .leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18) !important;
+  padding: 0 !important;
+}
+
+.fleet-popup .leaflet-popup-content {
+  margin: 0 !important;
+  min-width: 280px;
+  max-width: 360px;
+}
+
+.fleet-popup .leaflet-popup-tip {
+  background: #ffffff !important;
+}
+
+.fleet-popup .leaflet-popup-close-button {
+  top: 12px !important;
+  right: 12px !important;
+  color: #6b7280 !important;
+  font-size: 22px !important;
+  font-weight: 400 !important;
+}
+
+.fleet-popup-card {
+  padding: 18px 18px 16px 18px;
+}
+
+.fleet-popup-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 12px;
+  padding-right: 28px;
+}
+
+.fleet-popup-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #374151;
+}
+
+.fleet-popup-row span {
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.fleet-popup-row strong {
+  color: #111827;
+  font-weight: 600;
+  word-break: break-word;
+}

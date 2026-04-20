@@ -1,8 +1,8 @@
 import axios, { AxiosError } from "axios";
 
 const API_ORIGIN =
-  import.meta.env.VITE_API_URL?.replace(/\/+$/, "") || "http://138.197.182.83:4000";
-
+  import.meta.env.VITE_API_URL?.replace(/\/+$/, "") || "/api";
+  
 export const TOKEN_KEY = "fleet-auth-token";
 export const AUTH_STORAGE_KEY = "fleet-auth";
 

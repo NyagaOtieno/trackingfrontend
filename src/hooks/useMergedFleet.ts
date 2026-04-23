@@ -12,22 +12,32 @@ export function useMergedFleet() {
         axios.get(`${API}/api/telemetry/latest`),
       ]);
 
-      const vehicles = vehiclesRes.data.data;
-      const telemetry = telemetryRes.data.data;
+      const vehicles = vehiclesRes.data.data || [];
+      const telemetry = telemetryRes.data.data || [];
 
-      // 🔥 TEMP MATCH (since no real relation exists)
-      return telemetry.map((t: any, index: number) => {
-        const vehicle = vehicles[index]; // ⚠️ TEMP: match by index
+      // 🔥 Build telemetry map (correct matching)
+      const posMap = new Map<string, any>();
+
+      for (const t of telemetry) {
+        const key = String(t.device_id ?? "").trim();
+        if (key) posMap.set(key, t);
+      }
+
+      return vehicles.map((v: any) => {
+        const key = String(v.deviceUid ?? v.device_uid ?? "").trim();
+        const t = posMap.get(key);
 
         return {
-          deviceUid: t.device_id,
-          lat: t.latitude,
-          lon: t.longitude,
-          speedKph: t.speed,
-          receivedAt: t.signal_time,
-
-          // 🔥 IMPORTANT
-          vehicleReg: vehicle?.plate_number ?? "Unknown",
+          ...v,
+          position: t
+            ? {
+                deviceUid: key,
+                lat: t.latitude,
+                lon: t.longitude,
+                speedKph: t.speed,
+                receivedAt: t.signal_time,
+              }
+            : null,
         };
       });
     },

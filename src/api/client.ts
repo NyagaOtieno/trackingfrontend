@@ -19,22 +19,25 @@ export const clearStoredSession = () => {
 };
 
 // =========================
-// BASE URL (IMPORTANT FIX FOR VERCEL)
+// BASE URL (FIXED FOR VERCEL + LOCAL DEV)
 // =========================
-const API_ORIGIN = (() => {
-  const envUrl = import.meta.env.VITE_API_URL;
+const API_BASE_URL = (() => {
+  const env = import.meta.env.VITE_API_URL;
 
-  // IMPORTANT: force clean routing
-  if (!envUrl) return "/api";
+  // CASE 1: backend explicitly set (production)
+  if (env && env.trim() !== "") {
+    return env.replace(/\/+$/, "");
+  }
 
-  return envUrl.replace(/\/+$/, "");
+  // CASE 2: Vercel rewrite fallback (/api → backend proxy)
+  return "/api";
 })();
 
 // =========================
-// AXIOS CLIENT
+// AXIOS INSTANCE
 // =========================
 export const apiClient = axios.create({
-  baseURL: API_ORIGIN,
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
     "Content-Type": "application/json",
@@ -48,10 +51,8 @@ apiClient.interceptors.request.use((config) => {
   const token = getStoredToken();
 
   if (token) {
-    config.headers = {
-      ...config.headers,
-      Authorization: `Bearer ${token}`,
-    };
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
   }
 
   return config;
@@ -71,7 +72,7 @@ apiClient.interceptors.response.use(
 );
 
 // =========================
-// RESPONSE NORMALIZER
+// SAFE RESPONSE UNWRAPPER
 // =========================
 export function unwrapApiResponse<T>(payload: unknown): T {
   if (
@@ -80,23 +81,25 @@ export function unwrapApiResponse<T>(payload: unknown): T {
     "data" in payload &&
     (payload as any).data !== undefined
   ) {
-    return (payload as any).data;
+    return (payload as any).data as T;
   }
 
   return payload as T;
 }
 
 // =========================
-// ERROR HELPER
+// ERROR NORMALIZER
 // =========================
 export function getApiMessage(
   error: unknown,
   fallback = "Request failed"
 ): string {
   if (axios.isAxiosError(error)) {
+    const data = error.response?.data as any;
+
     return (
-      error.response?.data?.message ||
-      error.response?.data?.error ||
+      data?.message ||
+      data?.error ||
       error.message ||
       fallback
     );

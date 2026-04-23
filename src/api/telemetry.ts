@@ -1,30 +1,46 @@
-import { apiClient, unwrapApiResponse } from "./client";
+import { apiClient } from "./client";
 
-export type TelemetryNormalized = {
-  deviceUid: string;     // ✅ string (CRITICAL)
+export interface TelemetryNormalized {
+  deviceUid: string;
   lat: number;
   lon: number;
   speedKph: number;
+  heading: number;
   ignition: boolean;
-  receivedAt: string;    // ISO timestamp
+  receivedAt: string | null;
   vehicleReg: string;
-};
+  signal_time?: string | null;
+}
 
 export async function getLatestTelemetry(): Promise<TelemetryNormalized[]> {
-  const res = await apiClient.get("/telemetry/latest");
+  const res = await apiClient.get("/api/telemetry/latest?limit=10000");
+  const rows = res.data?.data ?? [];
 
-  const data = unwrapApiResponse<any[]>(res.data);
+  return rows
+    .map((r: Record<string, unknown>) => {
+      const lat = Number(r.latitude);
+      const lon = Number(r.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      if (lat === 0 && lon === 0) return null;
+      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
 
-  return data
-    // ✅ remove invalid coordinates
-    .filter((t) => t.latitude !== 0 && t.longitude !== 0)
-    .map((t) => ({
-      deviceUid: String(t.device_uid), // ✅ FIXED
-      lat: Number(t.latitude),
-      lon: Number(t.longitude),
-      speedKph: Number(t.speed ?? 0),
-      ignition: Boolean(t.ignition ?? false),
-      receivedAt: t.recorded_at, // ✅ FIXED
-      vehicleReg: t.plate_number ?? "Unknown",
-    }));
+      const receivedAt =
+        (r.signal_time as string) ||
+        (r.recorded_at as string) ||
+        (r.received_at as string) ||
+        null;
+
+      return {
+        deviceUid: String(r.device_uid ?? r.device_id ?? ""),
+        lat,
+        lon,
+        speedKph: Number(r.speed ?? 0),
+        heading: Number(r.heading ?? 0),
+        ignition: Boolean(r.ignition),
+        receivedAt,
+        vehicleReg: (r.plate_number as string) ?? "Unknown",
+        signal_time: receivedAt,
+      } as TelemetryNormalized;
+    })
+    .filter(Boolean) as TelemetryNormalized[];
 }

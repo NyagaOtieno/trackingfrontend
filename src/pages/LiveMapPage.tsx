@@ -3,9 +3,13 @@ import { FleetSidebar } from "@/components/layout/FleetSidebar";
 import { VehicleDrawer } from "@/components/layout/VehicleDrawer";
 import { MapView } from "@/components/map/MapView";
 import { useFleetStore } from "@/hooks/useFleetStore";
+import { useMergedFleet } from "@/hooks/useMergedFleet";
 
 export default function LiveMapPage() {
   const { selectedDeviceUid, isConnected } = useFleetStore();
+
+  // ✅ SINGLE SOURCE OF TRUTH
+  const { data: vehicles = [], isLoading } = useMergedFleet();
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background">
@@ -20,11 +24,13 @@ export default function LiveMapPage() {
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="relative z-20 h-full shrink-0">
-            <FleetSidebar />
+            {/* ✅ PASS VEHICLES */}
+            <FleetSidebar vehicles={vehicles} />
           </div>
 
           <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-            <MapView />
+            {/* ✅ PASS VEHICLES */}
+            <MapView vehicles={vehicles} />
           </main>
 
           {selectedDeviceUid && (

@@ -1,136 +1,104 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
-import type { TelemetryNormalized } from "@/api/telemetry";
 import { useFleetStore } from "@/hooks/useFleetStore";
 
-const ONLINE_THRESHOLD_MS = 10 * 60 * 1000;
-const SELECTED_ZOOM = 18;
-const MAX_MARKERS = 1500;
+// ✅ SAME thresholds as sidebar
+const ONLINE_MS = 60_000;
+const ALERT_MS = 5 * 3600_000;
 
-interface MarkerLayerProps {
-  positions: TelemetryNormalized[];
+const SELECTED_ZOOM = 18;
+const MAX_MARKERS = 5000; // increase safely
+
+function getStatus(ts?: string) {
+  if (!ts) return "alert";
+  const age = Date.now() - new Date(ts).getTime();
+  if (age < ONLINE_MS) return "online";
+  if (age < ALERT_MS) return "offline";
+  return "alert";
 }
 
-function getSpeedColor(speed: number, isOnline: boolean): string {
-  if (!isOnline) return "#737373";
+function getColor(status: string, speed: number) {
+  if (status === "alert") return "#f59e0b"; // amber
+  if (status === "offline") return "#6b7280";
   if (speed <= 5) return "#64748b";
   if (speed <= 30) return "#16a34a";
   if (speed <= 80) return "#2563eb";
   return "#dc2626";
 }
 
-function createVehicleIcon(isOnline: boolean, speed: number) {
-  const color = getSpeedColor(speed, isOnline);
+function createIcon(status: string, speed: number) {
+  const color = getColor(status, speed);
 
   return L.divIcon({
     className: "",
-    iconSize: [12, 12],
+    iconSize: [14, 14],
     html: `<div style="
-      width:12px;
-      height:12px;
+      width:14px;height:14px;
       background:${color};
       border-radius:50%;
-      border:1px solid white;
+      border:2px solid white;
     "></div>`,
   });
 }
 
-export const MarkerLayer = memo(function MarkerLayer({
-  positions,
-}: MarkerLayerProps) {
+export const MarkerLayer = memo(function MarkerLayer({ vehicles }: any) {
   const map = useMap();
   const { selectedDeviceUid, setSelectedDevice } = useFleetStore();
 
-  // ✅ FIXED TYPES
-  const markersRef = useRef<Map<string, L.Marker>>(new Map());
-  const iconCacheRef = useRef<Map<string, string>>(new Map());
-  const lastCenteredUidRef = useRef<string | null>(null);
+  const markersRef = useRef(new Map());
 
-  const [, forceRender] = useState(0);
-
-  const safePositions = useMemo(
-    () => positions.slice(0, MAX_MARKERS),
-    [positions]
+  const safeVehicles = useMemo(
+    () => vehicles.filter((v: any) => v.position).slice(0, MAX_MARKERS),
+    [vehicles]
   );
 
   useEffect(() => {
-    const existingIds = new Set<string>();
+    const active = new Set();
 
-    for (const pos of safePositions) {
-      const { lat, lon, speedKph, deviceUid, vehicleReg, receivedAt } = pos;
+    for (const v of safeVehicles) {
+      const p = v.position;
+      if (!p) continue;
 
-      if (!lat || !lon) continue;
+      const lat = Number(p.lat);
+      const lon = Number(p.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
-      existingIds.add(deviceUid);
+      const uid = String(v.deviceUid);
+      active.add(uid);
 
-      const isOnline =
-        Date.now() - new Date(receivedAt).getTime() < ONLINE_THRESHOLD_MS;
+      const status = getStatus(p.receivedAt);
+      const icon = createIcon(status, p.speedKph || 0);
 
-      const iconKey = `${isOnline}-${Math.round(speedKph / 5)}-${vehicleReg}`;
-
-      let marker = markersRef.current.get(deviceUid);
+      let marker = markersRef.current.get(uid);
 
       if (!marker) {
-        marker = L.marker([lat, lon], {
-          icon: createVehicleIcon(isOnline, speedKph),
-        })
+        marker = L.marker([lat, lon], { icon })
           .addTo(map)
-          .on("click", () => {
-            setSelectedDevice(deviceUid);
-          });
+          .on("click", () => setSelectedDevice(uid));
 
-        marker.bindPopup(
-          `<div>
-            <strong>${vehicleReg}</strong><br/>
-            Device: ${deviceUid}<br/>
-            Speed: ${Math.round(speedKph)} km/h<br/>
-            Status: ${isOnline ? "Online" : "Offline"}
-          </div>`
-        );
-
-        markersRef.current.set(deviceUid, marker);
-        iconCacheRef.current.set(deviceUid, iconKey);
+        markersRef.current.set(uid, marker);
       } else {
-        const cur = marker.getLatLng();
-
-        if (cur.lat !== lat || cur.lng !== lon) {
-          marker.setLatLng([lat, lon]);
-        }
-
-        if (iconCacheRef.current.get(deviceUid) !== iconKey) {
-          marker.setIcon(createVehicleIcon(isOnline, speedKph));
-          iconCacheRef.current.set(deviceUid, iconKey);
-        }
+        marker.setLatLng([lat, lon]);
+        marker.setIcon(icon);
       }
     }
 
-    // cleanup removed markers
     markersRef.current.forEach((marker, uid) => {
-      if (!existingIds.has(uid)) {
+      if (!active.has(uid)) {
         map.removeLayer(marker);
         markersRef.current.delete(uid);
-        iconCacheRef.current.delete(uid);
       }
     });
-  }, [safePositions, map, setSelectedDevice]);
+  }, [safeVehicles]);
 
-  // center selected
   useEffect(() => {
     if (!selectedDeviceUid) return;
-
     const marker = markersRef.current.get(selectedDeviceUid);
-    if (!marker) return;
-
-    const latLng = marker.getLatLng();
-
-    if (lastCenteredUidRef.current !== selectedDeviceUid) {
-      map.flyTo(latLng, SELECTED_ZOOM);
-      lastCenteredUidRef.current = selectedDeviceUid;
+    if (marker) {
+      map.flyTo(marker.getLatLng(), SELECTED_ZOOM);
     }
-
-    marker.openPopup();
-  }, [selectedDeviceUid, map]);
+  }, [selectedDeviceUid]);
 
   return null;
 });

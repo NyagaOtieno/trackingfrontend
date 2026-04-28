@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import type { FilterStatus } from "@/types/fleet";
 
+/**
+ * =========================
+ * TYPES
+ * =========================
+ */
+
 export interface GeofenceAlertItem {
   id: string;
   deviceUid: string;
@@ -18,10 +24,34 @@ export interface GeofenceItem {
   active?: boolean;
 }
 
+/**
+ * =========================
+ * INTERNAL SAFE TYPES
+ * =========================
+ */
+type DeviceKey = string;
+
 interface FleetStore {
-  selectedDeviceUid: string | null;
+  /**
+   * =========================
+   * DEVICE STATE
+   * =========================
+   */
+  selectedDeviceUid: DeviceKey | null;
+
+  /**
+   * =========================
+   * UI STATE
+   * =========================
+   */
   searchQuery: string;
   filterStatus: FilterStatus;
+
+  /**
+   * =========================
+   * HISTORY + PLAYBACK
+   * =========================
+   */
   historyMode: boolean;
   historyRange: string;
 
@@ -29,18 +59,45 @@ interface FleetStore {
   playbackIndex: number;
   playbackSpeedMs: number;
 
+  /**
+   * =========================
+   * LIVE STATE
+   * =========================
+   */
   autoFollow: boolean;
   isConnected: boolean;
-  lastUpdated: Date | null;
+  lastUpdated: string | null;
+
+  /**
+   * forces map recenter trigger (safe reactive signal)
+   */
   centerRequested: number;
+
+  /**
+   * =========================
+   * UI CONTROLS
+   * =========================
+   */
   alertsOpen: boolean;
 
+  /**
+   * =========================
+   * GEOFENCING
+   * =========================
+   */
   geofences: GeofenceItem[];
   geofenceAlerts: GeofenceAlertItem[];
 
-  setSelectedDevice: (uid: string | null) => void;
+  /**
+   * =========================
+   * ACTIONS
+   * =========================
+   */
+  setSelectedDevice: (uid: DeviceKey | null) => void;
+
   setSearchQuery: (query: string) => void;
   setFilterStatus: (status: FilterStatus) => void;
+
   setHistoryMode: (value: boolean) => void;
   setHistoryRange: (value: string) => void;
 
@@ -53,20 +110,41 @@ interface FleetStore {
 
   setAutoFollow: (value: boolean) => void;
   setIsConnected: (value: boolean) => void;
-  setLastUpdated: (value: Date | null) => void;
+  setLastUpdated: (value: string | null) => void;
+
   requestCenter: () => void;
   setAlertsOpen: (value: boolean) => void;
 
   addGeofence: (item: GeofenceItem) => void;
   removeGeofence: (id: string) => void;
+
   addGeofenceAlert: (item: GeofenceAlertItem) => void;
   clearGeofenceAlerts: () => void;
 }
 
+/**
+ * =========================
+ * SAFE CONSTANTS
+ * =========================
+ */
+const MAX_ALERTS = 100;
+
+/**
+ * =========================
+ * STORE
+ * =========================
+ */
 export const useFleetStore = create<FleetStore>((set, get) => ({
+  /**
+   * =========================
+   * INITIAL STATE
+   * =========================
+   */
   selectedDeviceUid: null,
+
   searchQuery: "",
   filterStatus: "all",
+
   historyMode: false,
   historyRange: "30m",
 
@@ -78,32 +156,79 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
   isConnected: true,
   lastUpdated: null,
   centerRequested: 0,
+
   alertsOpen: false,
 
   geofences: [],
   geofenceAlerts: [],
 
+  /**
+   * =========================
+   * DEVICE SELECTION (IMPROVED SAFETY)
+   * =========================
+   */
   setSelectedDevice: (uid) =>
-    set({
+    set((state) => ({
       selectedDeviceUid: uid,
-      centerRequested: uid ? get().centerRequested + 1 : get().centerRequested,
-    }),
+      centerRequested: uid
+        ? state.centerRequested + 1
+        : state.centerRequested,
+      autoFollow: uid ? state.autoFollow : false,
+    })),
 
-  setSearchQuery: (query) => set({ searchQuery: query }),
-  setFilterStatus: (status) => set({ filterStatus: status }),
-  setHistoryMode: (value) => set({ historyMode: value }),
-  setHistoryRange: (value) => set({ historyRange: value }),
+  /**
+   * =========================
+   * UI STATE
+   * =========================
+   */
+  setSearchQuery: (query) =>
+    set(() => ({ searchQuery: query.trimStart() })),
 
-  setPlaybackActive: (value) => set({ playbackActive: value }),
-  setPlaybackIndex: (value) => set({ playbackIndex: Math.max(0, value) }),
+  setFilterStatus: (status) =>
+    set(() => ({ filterStatus: status })),
+
+  /**
+   * =========================
+   * HISTORY
+   * =========================
+   */
+  setHistoryMode: (value) =>
+    set(() => ({
+      historyMode: value,
+      playbackActive: value ? false : get().playbackActive,
+    })),
+
+  setHistoryRange: (value) =>
+    set(() => ({ historyRange: value })),
+
+  /**
+   * =========================
+   * PLAYBACK ENGINE (HARDENED)
+   * =========================
+   */
+  setPlaybackActive: (value) =>
+    set(() => ({
+      playbackActive: value,
+    })),
+
+  setPlaybackIndex: (value) =>
+    set(() => ({
+      playbackIndex: Math.max(0, value),
+    })),
 
   stepPlaybackForward: (max) =>
     set((state) => {
-      if (max <= 0) return { playbackActive: false, playbackIndex: 0 };
+      if (!max || max <= 0) {
+        return { playbackActive: false, playbackIndex: 0 };
+      }
 
       const next = state.playbackIndex + 1;
+
       if (next >= max) {
-        return { playbackIndex: max - 1, playbackActive: false };
+        return {
+          playbackIndex: max - 1,
+          playbackActive: false,
+        };
       }
 
       return { playbackIndex: next };
@@ -115,25 +240,53 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
     })),
 
   resetPlayback: () =>
-    set({
+    set(() => ({
       playbackActive: false,
       playbackIndex: 0,
-    }),
+    })),
 
   setPlaybackSpeedMs: (value) =>
-    set({
+    set(() => ({
       playbackSpeedMs: Math.max(200, value),
-    }),
+    })),
 
-  setAutoFollow: (value) => set({ autoFollow: value }),
-  setIsConnected: (value) => set({ isConnected: value }),
-  setLastUpdated: (value) => set({ lastUpdated: value }),
+  /**
+   * =========================
+   * LIVE STATE
+   * =========================
+   */
+  setAutoFollow: (value) =>
+    set(() => ({ autoFollow: value })),
 
+  setIsConnected: (value) =>
+    set(() => ({ isConnected: value })),
+
+  setLastUpdated: (value) =>
+    set(() => ({ lastUpdated: value })),
+
+  /**
+   * =========================
+   * MAP CENTER SIGNAL (IMPROVED)
+   * =========================
+   */
   requestCenter: () =>
-    set((state) => ({ centerRequested: state.centerRequested + 1 })),
+    set((state) => ({
+      centerRequested: state.centerRequested + 1,
+    })),
 
-  setAlertsOpen: (value) => set({ alertsOpen: value }),
+  /**
+   * =========================
+   * ALERT UI
+   * =========================
+   */
+  setAlertsOpen: (value) =>
+    set(() => ({ alertsOpen: value })),
 
+  /**
+   * =========================
+   * GEOFENCES
+   * =========================
+   */
   addGeofence: (item) =>
     set((state) => ({
       geofences: [...state.geofences, item],
@@ -144,10 +297,23 @@ export const useFleetStore = create<FleetStore>((set, get) => ({
       geofences: state.geofences.filter((g) => g.id !== id),
     })),
 
+  /**
+   * =========================
+   * ALERT BUFFER (OPTIMIZED)
+   * =========================
+   */
   addGeofenceAlert: (item) =>
-    set((state) => ({
-      geofenceAlerts: [item, ...state.geofenceAlerts].slice(0, 100),
-    })),
+    set((state) => {
+      const updated = [item, ...state.geofenceAlerts];
 
-  clearGeofenceAlerts: () => set({ geofenceAlerts: [] }),
+      return {
+        geofenceAlerts:
+          updated.length > MAX_ALERTS
+            ? updated.slice(0, MAX_ALERTS)
+            : updated,
+      };
+    }),
+
+  clearGeofenceAlerts: () =>
+    set(() => ({ geofenceAlerts: [] })),
 }));

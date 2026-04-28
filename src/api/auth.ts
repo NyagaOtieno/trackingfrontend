@@ -20,7 +20,16 @@ export async function loginRequest(
     payload
   );
 
-  const data = unwrapApiResponse<LoginResponseData>(response.data);
+  // unwrap safely (handles both ApiEnvelope and raw response)
+  const raw = unwrapApiResponse<any>(response.data);
+
+  // backend wraps actual payload inside "data"
+  const data = raw?.data ?? raw;
+
+  // safety checks to avoid silent crashes
+  if (!data?.token || !data?.user) {
+    throw new Error("Invalid login response format");
+  }
 
   return {
     token: data.token,
@@ -36,7 +45,12 @@ export async function fetchMe(): Promise<AuthUser> {
     "/auth/me"
   );
 
-  return normalizeAuthUser(
-    unwrapApiResponse<AuthUser>(response.data)
-  ) as AuthUser;
+  const raw = unwrapApiResponse<any>(response.data);
+  const data = raw?.data ?? raw;
+
+  if (!data) {
+    throw new Error("Invalid user response format");
+  }
+
+  return normalizeAuthUser(data) as AuthUser;
 }

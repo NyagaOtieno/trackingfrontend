@@ -1,13 +1,20 @@
-import { useQuery } from '@tanstack/react-query';
-import { fetchHistory } from '@/api/positions';
-import type { HistoryPoint } from '@/types/fleet';
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/api/client";
 
-export function useHistory(deviceUid: string | null, range?: { from?: string; to?: string; limit?: number }) {
-  return useQuery<HistoryPoint[]>({
-    queryKey: ['positions', 'history', deviceUid, range],
-    queryFn: () => fetchHistory(deviceUid!, range),
+export function useHistory(deviceUid: string | null, range?: string) {
+  return useQuery({
+    queryKey: ["history", deviceUid, range],
     enabled: !!deviceUid,
-    staleTime: 30_000,
-    retry: 2,
+    staleTime: 30000,
+    queryFn: async () => {
+      const res = await apiClient.get("/telemetry/latest", {
+        params: {
+          deviceUid,
+          range,
+        },
+      });
+
+      return res.data?.data ?? [];
+    },
   });
 }

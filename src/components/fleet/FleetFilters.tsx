@@ -5,33 +5,36 @@ interface FleetFiltersProps {
   counts: FilterCountMap;
 }
 
-const filters: { key: FilterStatus; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "online", label: "Online" },
+const FILTERS: { key: FilterStatus; label: string }[] = [
+  { key: "all",     label: "All" },
+  { key: "online",  label: "Online" },
   { key: "offline", label: "Offline" },
-  { key: "expired", label: "Expired" },
-  { key: "alerts", label: "Alerts" },
+  { key: "alerts",  label: "Alerts" },
 ];
 
 export function FleetFilters({ counts }: FleetFiltersProps) {
   const { filterStatus, setFilterStatus } = useFleetStore();
 
-  return (
-    <div className="px-3 pb-2 flex flex-wrap gap-1">
-      {filters.map((f) => {
-        const active = filterStatus === f.key;
+  // Guard: if counts somehow undefined, show nothing
+  if (!counts) return null;
 
+  return (
+    <div className="flex flex-wrap gap-1 px-3 pb-2">
+      {FILTERS.map((f) => {
+        const active = filterStatus === f.key;
+        const count = counts[f.key] ?? 0;
         return (
           <button
             key={f.key}
+            type="button"
             onClick={() => setFilterStatus(f.key)}
-            className={`text-[11px] px-2 py-1 rounded-md transition ${
+            className={`rounded-md px-2 py-1 text-[11px] transition-colors ${
               active
                 ? "bg-primary text-white"
                 : "bg-muted text-muted-foreground hover:bg-accent"
             }`}
           >
-            {f.label} ({counts[f.key]})
+            {f.label} ({count})
           </button>
         );
       })}

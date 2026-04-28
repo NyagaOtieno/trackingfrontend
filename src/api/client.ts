@@ -1,4 +1,4 @@
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 export const TOKEN_KEY = "fleet-auth-token";
 export const AUTH_STORAGE_KEY = "fleet-auth";
@@ -19,17 +19,19 @@ export const clearStoredSession = () => {
 };
 
 // =========================
-// BASE URL (FIXED FOR VERCEL + LOCAL DEV)
+// BASE URL (IMPROVED SAFE RESOLUTION)
 // =========================
+const normalizeUrl = (url: string) => url.replace(/\/+$/, "");
+
 const API_BASE_URL = (() => {
   const env = import.meta.env.VITE_API_URL;
 
-  // CASE 1: backend explicitly set (production)
-  if (env && env.trim() !== "") {
-    return env.replace(/\/+$/, "");
+  if (env && env.trim()) {
+    return normalizeUrl(env);
   }
 
-  // CASE 2: Vercel rewrite fallback (/api → backend proxy)
+  // IMPORTANT FIX:
+  // In dev/proxy mode, ensure we don't accidentally hit wrong path
   return "/api";
 })();
 
@@ -38,57 +40,65 @@ const API_BASE_URL = (() => {
 // =========================
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 20000, // slightly safer for mobile/remote server latency
   headers: {
     "Content-Type": "application/json",
   },
 });
 
 // =========================
-// REQUEST INTERCEPTOR
+// REQUEST INTERCEPTOR (IMPROVED TYPESAFE)
 // =========================
-apiClient.interceptors.request.use((config) => {
-  const token = getStoredToken();
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = getStoredToken();
 
-  if (token) {
     config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
 
-  return config;
-});
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 // =========================
 // RESPONSE INTERCEPTOR
 // =========================
 apiClient.interceptors.response.use(
-  (res) => res,
+  (response) => response,
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+
+    if (status === 401) {
       clearStoredSession();
     }
+
     return Promise.reject(error);
   }
 );
 
 // =========================
-// SAFE RESPONSE UNWRAPPER
+// SAFE RESPONSE UNWRAPPER (MORE ROBUST)
 // =========================
 export function unwrapApiResponse<T>(payload: unknown): T {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "data" in payload &&
-    (payload as any).data !== undefined
-  ) {
-    return (payload as any).data as T;
+  if (!payload || typeof payload !== "object") {
+    return payload as T;
   }
 
+  const p = payload as any;
+
+  // handles: { data: {...} }
+  if (p.data !== undefined) return p.data as T;
+
+  // handles: direct backend response
   return payload as T;
 }
 
 // =========================
-// ERROR NORMALIZER
+// ERROR NORMALIZER (IMPROVED EDGE HANDLING)
 // =========================
 export function getApiMessage(
   error: unknown,
@@ -100,6 +110,8 @@ export function getApiMessage(
     return (
       data?.message ||
       data?.error ||
+      data?.msg ||
+      error.response?.statusText ||
       error.message ||
       fallback
     );

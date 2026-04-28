@@ -24,7 +24,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       token: getStoredToken(),
       isLoading: false,
@@ -32,13 +32,13 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: !!getStoredToken(),
 
       // =========================
-      // LOGIN
+      // LOGIN (FIXED)
       // =========================
       login: async (email, password) => {
         set({ isLoading: true, error: null });
 
         try {
-          // IMPORTANT: only send email as "login" if backend expects it
+          // 🔥 FIX: backend expects "login", not "email"
           const result = await loginRequest({
             login: email.trim(),
             password,
@@ -56,14 +56,11 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
           });
 
-          // fetch user if missing
           if (!result.user) {
             try {
               const me = await fetchMe();
               set({ user: me });
-            } catch {
-              // ignore
-            }
+            } catch {}
           }
 
           return true;

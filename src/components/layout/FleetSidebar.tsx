@@ -1,4 +1,3 @@
-// src/components/fleet/FleetSidebar.tsx
 import { useMemo } from "react";
 import { Search, Truck, Loader2 } from "lucide-react";
 import { useFleetStore } from "@/hooks/useFleetStore";
@@ -8,162 +7,170 @@ import { useAlerts } from "@/hooks/useAlerts";
 import { FleetCard } from "@/components/fleet/FleetCard";
 import { FleetFilters } from "@/components/fleet/FleetFilters";
 import { AlertsInbox } from "@/components/fleet/AlertsInbox";
-import type { VehicleState } from "@/types/fleet";
+import type { VehicleState, LivePosition, FilterCountMap } from "@/types/fleet";
 
-const ONLINE_THRESHOLD_MS = 10 * 60 * 1000;
+const OFFLINE_MS = 3 * 60_000;
+const ALERT_MS   = 5 * 3600_000;
 
-function isVehicleExpired(vehicle: { isExpired?: boolean; expiresAt?: string | null }) {
-  if (vehicle.isExpired) return true;
-  if (!vehicle.expiresAt) return false;
-  return new Date(vehicle.expiresAt).getTime() < Date.now();
+function getStatus(ts?: string | null): "online" | "offline" | "alert" {
+  if (!ts) return "alert";
+  const age = Date.now() - new Date(ts).getTime();
+  if (isNaN(age)) return "alert";
+  if (age < OFFLINE_MS) return "online";
+  if (age < ALERT_MS)   return "offline";
+  return "alert";
 }
 
 export function FleetSidebar() {
-  const searchQuery = useFleetStore((state) => state.searchQuery);
-  const setSearchQuery = useFleetStore((state) => state.setSearchQuery);
-  const filterStatus = useFleetStore((state) => state.filterStatus);
-  const setSelectedDevice = useFleetStore((state) => state.setSelectedDevice);
+  const searchQuery       = useFleetStore((s) => s.searchQuery);
+  const setSearchQuery    = useFleetStore((s) => s.setSearchQuery);
+  const filterStatus      = useFleetStore((s) => s.filterStatus);
+  const setSelectedDevice = useFleetStore((s) => s.setSelectedDevice);
 
-  const { data: devices = [], isLoading: devicesLoading, isError: devicesError } = useFleetDevices();
+  const { data: devices = [], isLoading: devicesLoading, isError } = useFleetDevices();
   const { data: positions = [], isLoading: positionsLoading } = useLatestPositions();
   const { data: alerts = [] } = useAlerts();
 
-  // Map positions by deviceUid
-  const vehicles: VehicleState[] = useMemo(() => {
-    const posMap = new Map(
-      positions.map((p) => [String(p.deviceUid ?? p.device_id), p])
-    );
+  // Build position maps keyed by String(vehicleId) AND plateNumber
+  const { posByVehicleId, posByPlate } = useMemo(() => {
+    const posByVehicleId = new Map<string, LivePosition>();
+    const posByPlate     = new Map<string, LivePosition>();
 
+    for (const p of positions) {
+      // Primary key: String(vehicleId) — matches device.deviceUid = String(vehicle.id)
+      if (p.vehicleId) posByVehicleId.set(String(p.vehicleId), p);
+      // Fallback: plate
+      if (p.plateNumber) posByPlate.set(p.plateNumber.toUpperCase(), p);
+    }
+    return { posByVehicleId, posByPlate };
+  }, [positions]);
+
+  // Merge devices + positions — deviceUid is always String(device.id)
+  const vehicles: VehicleState[] = useMemo(() => {
     return devices.map((device) => {
-      const deviceKey = String(device.deviceUid ?? device.id);
-      const position = posMap.get(deviceKey);
+      const key   = String(device.id);          // consistent key
+      const plate = device.plate_number?.toUpperCase();
+
+      const pos =
+        posByVehicleId.get(key) ||
+        (plate ? posByPlate.get(plate) : null) ||
+        null;
+
+      const ts     = pos?.receivedAt ?? null;
+      const status = getStatus(ts);
 
       return {
         ...device,
-        position,
-        isOnline: position
-          ? Date.now() - new Date(position.receivedAt ?? position.signal_time).getTime() < ONLINE_THRESHOLD_MS
-          : false,
-        isExpiredResolved: isVehicleExpired(device),
-        lastSeen: position?.receivedAt ?? position?.signal_time ?? null,
-        displayName: device.label || device.vehicleReg || "Unknown Vehicle",
-      };
+        deviceUid:   key,                        // ← always String(id)
+        position:    pos,
+        isOnline:    status === "online",
+        isAlert:     status === "alert",
+        isExpiredResolved: false,
+        lastSeen:    ts,
+        displayName: device.plate_number || device.unit_name || "Unknown",
+      } as VehicleState;
     });
-  }, [devices, positions]);
+  }, [devices, posByVehicleId, posByPlate]);
 
-  // Search filter
-  const searchedVehicles = useMemo(() => {
-    if (!searchQuery) return vehicles;
-    const q = searchQuery.toLowerCase().trim();
+  // Search
+  const searched = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return vehicles;
     return vehicles.filter((v) =>
-      [v.vehicleReg, v.label, v.deviceUid, v.displayName].some((field) =>
-        String(field ?? "").toLowerCase().includes(q)
-      )
+      [v.plate_number, v.unit_name, v.serial, v.displayName]
+        .some((f) => String(f ?? "").toLowerCase().includes(q))
     );
   }, [vehicles, searchQuery]);
 
   // Status filter
-  const filteredVehicles = useMemo(() => {
+  const filtered = useMemo(() => {
     switch (filterStatus) {
-      case "online": return searchedVehicles.filter((v) => v.isOnline);
-      case "offline": return searchedVehicles.filter((v) => !v.isOnline);
-      case "expired": return searchedVehicles.filter((v) => v.isExpiredResolved);
-      case "alerts": return searchedVehicles; // alerts handled separately
-      case "all":
-      default: return searchedVehicles;
+      case "online":  return searched.filter((v) => v.isOnline);
+      case "offline": return searched.filter((v) => !v.isOnline && !v.isAlert);
+      case "alerts":  return searched.filter((v) => v.isAlert);
+      default:        return searched;
     }
-  }, [searchedVehicles, filterStatus]);
+  }, [searched, filterStatus]);
 
-  // Counts for filters and header
-  const counts = useMemo(() => {
-    const online = vehicles.filter((v) => v.isOnline).length;
-    const offline = vehicles.filter((v) => !v.isOnline).length;
-    const expired = vehicles.filter((v) => v.isExpiredResolved).length;
-    return { all: vehicles.length, online, offline, expired, alerts: alerts.length };
-  }, [vehicles, alerts]);
-
-  const listTitle = useMemo(() => {
-    switch (filterStatus) {
-      case "online": return `Online (${counts.online})`;
-      case "offline": return `Offline (${counts.offline})`;
-      case "expired": return `Expired (${counts.expired})`;
-      case "alerts": return `Alerts (${counts.alerts})`;
-      default: return `All Vehicles (${counts.all})`;
+  // Counts
+  const counts: FilterCountMap = useMemo(() => {
+    let online = 0, offline = 0, alertCount = 0;
+    for (const v of vehicles) {
+      if (v.isOnline)     online++;
+      else if (v.isAlert) alertCount++;
+      else                offline++;
     }
-  }, [filterStatus, counts]);
+    return { all: vehicles.length, online, offline, expired: 0, alerts: alertCount };
+  }, [vehicles]);
+
+  // Render all matching (no artificial limit when searching)
+  const visible = useMemo(() => {
+    return searchQuery ? filtered : filtered.slice(0, 3000);
+  }, [filtered, searchQuery]);
 
   const isLoading = devicesLoading || positionsLoading;
 
   return (
     <aside className="flex h-full w-80 flex-col border-r border-border bg-card">
-      {/* Header */}
-      <div className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+      <div className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur">
         <div className="px-3 pt-4 pb-3 space-y-3">
-          <div className="flex items-center justify-between gap-2">
+
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-primary/10 p-2">
-                <Truck className="h-4 w-4 text-primary" />
-              </div>
+              <Truck className="h-4 w-4 text-primary" />
               <div>
-                <h2 className="text-sm font-semibold text-foreground">Fleet</h2>
-                <p className="text-[11px] text-muted-foreground">{counts.all} vehicles loaded</p>
+                <h2 className="text-sm font-semibold">Fleet</h2>
+                <p className="text-[11px] text-muted-foreground">
+                  {counts.online} online · {counts.all} total
+                </p>
               </div>
             </div>
             <button
-              type="button"
               onClick={() => setSelectedDevice(null)}
-              className="rounded-lg bg-muted px-2.5 py-1 text-[10px] font-medium hover:bg-secondary transition-colors"
+              className="rounded-lg bg-muted px-2 py-1 text-[10px] hover:bg-secondary"
             >
               Show All
             </button>
           </div>
 
-          {/* Search */}
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
             <input
-              type="text"
-              placeholder="Search plate, label, device UID…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-border bg-background py-2.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="Search plate / unit / serial"
+              className="w-full rounded-lg border bg-background py-2 pl-7 text-xs"
             />
           </div>
 
-          {/* Filter Tabs */}
           <FleetFilters counts={counts} />
-
-          {/* List summary */}
-          <div className="flex items-center justify-between border-t border-border px-3 py-2 text-[11px] font-medium text-muted-foreground">
-            <span>{listTitle}</span>
-            <span>Showing {filteredVehicles.length} of {searchedVehicles.length}</span>
-          </div>
         </div>
       </div>
 
-      {/* Vehicle List */}
-      <div className="flex-1 overflow-y-auto px-2 pt-2 pb-3">
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {filterStatus === "alerts" ? (
           <AlertsInbox alerts={alerts} />
         ) : isLoading ? (
-          <div className="flex h-40 items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Loading vehicles…
+          <div className="flex items-center justify-center gap-2 py-10 text-xs">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading vehicles...
           </div>
-        ) : devicesError ? (
-          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-xs text-destructive text-center">
-            Failed to load vehicles from <span className="font-mono">100.50.173.65:4000/api/telemetry/latest</span>
-          </div>
-        ) : filteredVehicles.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center">
-            <p className="text-sm font-medium text-foreground">No vehicles found</p>
-            <p className="mt-1 text-xs text-muted-foreground">Try another search term or switch filter.</p>
+        ) : isError ? (
+          <div className="text-xs text-red-500 p-3">Failed to load vehicles</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center text-xs text-muted-foreground py-10">
+            No vehicles found
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredVehicles.map((vehicle) => (
+            {visible.map((vehicle) => (
               <FleetCard key={vehicle.deviceUid} vehicle={vehicle} />
             ))}
+            {!searchQuery && filtered.length > 3000 && (
+              <p className="py-2 text-center text-[11px] text-muted-foreground">
+                Search to see all {filtered.length} vehicles
+              </p>
+            )}
           </div>
         )}
       </div>

@@ -5,7 +5,7 @@ import type { AlertItem, ApiResponse } from "@/types/fleet";
 async function fetchAlerts(): Promise<AlertItem[]> {
   try {
     const response = await apiClient.get<ApiResponse<AlertItem[]> | AlertItem[]>(
-      "/api/alerts"
+      "/alerts"
     );
     return unwrapApiResponse<AlertItem[]>(response.data) ?? [];
   } catch {

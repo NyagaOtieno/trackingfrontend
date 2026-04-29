@@ -27,11 +27,17 @@ export function VehicleDrawer() {
   const { data: positions = [] } = useLatestPositions();
 
   // ← KEY FIX: match by String(id) and String(vehicleId)
-  const device   = devices.find((d) => String(d.id) === selectedDeviceUid);
-  const position = positions.find((p) =>
+const device = devices.find(
+  (d) => String(d.vehicleId ?? d.id) === selectedDeviceUid
+);
+
+const position =
+  positions.find((p) =>
     p.vehicleId ? String(p.vehicleId) === selectedDeviceUid : false
-  ) ?? positions.find((p) =>
-    device?.plate_number && p.plateNumber?.toUpperCase() === device.plate_number?.toUpperCase()
+  ) ??
+  positions.find((p) =>
+    device?.plate_number &&
+    p.plateNumber?.toUpperCase() === device.plate_number.toUpperCase()
   );
 
   if (!selectedDeviceUid || !device) return null;

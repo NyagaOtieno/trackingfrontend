@@ -21,6 +21,8 @@ export const FleetCard = memo(function FleetCard({ vehicle }: FleetCardProps) {
   const resetPlayback = useFleetStore((state) => state.resetPlayback);
 
   const isSelected = selectedDeviceUid === vehicle.deviceUid;
+
+  // 🔥 TELEMETRY (from latest_positions)
   const speed = toSpeed(vehicle.position?.speedKph);
   const isMoving = speed > 0;
 
@@ -30,6 +32,13 @@ export const FleetCard = memo(function FleetCard({ vehicle }: FleetCardProps) {
     setPlaybackActive(false);
     resetPlayback();
   };
+
+  // 🔥 PRIMARY DISPLAY NAME = PLATE NUMBER
+  const title =
+  vehicle.plate_number ||
+  vehicle.vehicleReg ||
+  vehicle.unit_name ||
+  "Unknown Vehicle";
 
   return (
     <button
@@ -41,6 +50,7 @@ export const FleetCard = memo(function FleetCard({ vehicle }: FleetCardProps) {
           : "border-border bg-card hover:border-primary/20 hover:bg-secondary/30"
       }`}
     >
+      {/* status strip */}
       <div
         className={`absolute inset-y-0 left-0 w-1 ${
           vehicle.isOnline ? "bg-primary" : "bg-destructive"
@@ -48,16 +58,21 @@ export const FleetCard = memo(function FleetCard({ vehicle }: FleetCardProps) {
       />
 
       <div className="pl-1">
+        {/* HEADER */}
         <div className="mb-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
+            {/* 🔥 FIXED: plate_number FIRST */}
             <p className="truncate text-sm font-bold uppercase tracking-wide text-foreground">
-              {vehicle.vehicleReg || vehicle.label || "Unknown Vehicle"}
+              {title}
             </p>
+
+            {/* secondary info */}
             <p className="truncate text-[11px] text-muted-foreground">
-              {vehicle.label || "Unnamed device"}
+              {vehicle.unit_name || vehicle.serial || ""}
             </p>
           </div>
 
+          {/* STATUS */}
           <span
             className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
               vehicle.isOnline
@@ -74,6 +89,7 @@ export const FleetCard = memo(function FleetCard({ vehicle }: FleetCardProps) {
           </span>
         </div>
 
+        {/* TAGS */}
         <div className="mb-2 flex flex-wrap gap-1.5">
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -99,6 +115,7 @@ export const FleetCard = memo(function FleetCard({ vehicle }: FleetCardProps) {
           )}
         </div>
 
+        {/* TELEMETRY */}
         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Gauge className="h-3.5 w-3.5" />
@@ -109,11 +126,12 @@ export const FleetCard = memo(function FleetCard({ vehicle }: FleetCardProps) {
           <div className="flex items-center gap-1.5">
             <Radio className="h-3.5 w-3.5" />
             <span className="truncate font-mono">
-              {String(vehicle.deviceUid ?? "").replace("IMEI_", "")}
+              {vehicle.deviceUid}
             </span>
           </div>
         </div>
 
+        {/* LAST SEEN */}
         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
           <Clock3 className="h-3 w-3" />
           <span>

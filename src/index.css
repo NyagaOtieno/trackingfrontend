@@ -353,3 +353,26 @@
   font-weight: 600;
   word-break: break-word;
 }
+/*
+ * Add these utilities to your existing src/index.css
+ * They handle iOS safe area so the bottom nav doesn't hide behind the home indicator.
+ */
+
+/* Safe area spacing for bottom nav on iOS */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Ensure map content doesn't hide under the mobile bottom nav (64px + safe area) */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .leaflet-bottom {
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Push leaflet zoom/attribution above mobile nav */
+  .leaflet-bottom {
+    bottom: 72px !important;
+  }
+}

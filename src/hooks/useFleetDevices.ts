@@ -4,17 +4,14 @@ import { useAuthStore } from "@/hooks/useAuthStore";
 import type { Device, Vehicle } from "@/types/fleet";
 
 const PRIVILEGED = ["admin", "super_admin", "staff", "office_admin", "SUPER_ADMIN"];
+
 function mapVehicle(v: Vehicle): Device {
   const vehicleId = v.vehicleId ?? v.id;
-
   return {
     id: vehicleId,
-    vehicleId: vehicleId,
+    vehicleId,
     vehicle_id: vehicleId,
-
-    // 🔥 SINGLE SOURCE OF TRUTH
     deviceUid: String(vehicleId),
-
     label: v.unit_name || v.plate_number || `Vehicle ${vehicleId}`,
     plate_number: v.plate_number ?? null,
     unit_name: v.unit_name ?? null,
@@ -23,34 +20,84 @@ function mapVehicle(v: Vehicle): Device {
   };
 }
 
-export function useFleetDevices() {
-  const user = useAuthStore((s) => s.user);
+// ─── Internal full result (never exposed directly to callers) ────────────────
+interface FleetRaw {
+  devices: Device[];
+  serverTotal: number;
+}
 
-  return useQuery({
-    queryKey: ["vehicles", user?.id, user?.role],
-    queryFn: async (): Promise<Device[]> => {
-      try {
-        const res = await apiClient.get("/vehicles", {
-          params: { limit: 100000, offset: 0 }, // 🔥 remove 200 limit
-        });
+function buildQueryOptions(user: any, params?: {
+  search?: string; limit?: number; offset?: number; enabled?: boolean;
+}) {
+  return {
+    queryKey: [
+      "vehicles",
+      user?.id,
+      user?.role,
+      params?.search ?? "",
+      params?.limit,
+      params?.offset,
+    ] as const,
 
-        const raw: Vehicle[] = Array.isArray(res.data?.data)
-          ? res.data.data
-          : Array.isArray(res.data) ? res.data : [];
+    enabled: params?.enabled ?? true,
 
-        const all = raw.map(mapVehicle);
+    queryFn: async (): Promise<FleetRaw> => {
+      const res = await apiClient.get("/vehicles", {
+        params: {
+          limit: params?.limit ?? 100,   // small page keeps browser fast
+          offset: params?.offset ?? 0,
+          ...(params?.search?.trim() ? { search: params.search.trim() } : {}),
+        },
+      });
 
-        const role = user?.role ?? "";
-        if (role === "client" && user?.id && !PRIVILEGED.includes(role)) {
-          return all.filter(d => d.account_id === user.id);
-        }
+      const raw: Vehicle[] = Array.isArray(res.data?.data)
+        ? res.data.data
+        : Array.isArray(res.data)
+        ? res.data
+        : [];
 
-        return all;
-      } catch {
-        return [];
-      }
+      const serverTotal: number =
+        typeof res.data?.total === "number" ? res.data.total : raw.length;
+
+      const all = raw.map(mapVehicle);
+      const role = user?.role ?? "";
+      const devices =
+        role === "client" && user?.id && !PRIVILEGED.includes(role)
+          ? all.filter((d: Device) => d.account_id === user.id)
+          : all;
+
+      return { devices, serverTotal };
     },
+
     staleTime: 120_000,
     refetchInterval: 300_000,
+    placeholderData: (prev: FleetRaw | undefined) => prev,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRIMARY HOOK — data is Device[] (backward-compatible, no callers break)
+// ─────────────────────────────────────────────────────────────────────────────
+export function useFleetDevices(params?: {
+  search?: string; limit?: number; offset?: number; enabled?: boolean;
+}) {
+  const user = useAuthStore((s) => s.user);
+  return useQuery({
+    ...buildQueryOptions(user, params),
+    select: (raw: FleetRaw): Device[] => raw.devices,  // callers get Device[]
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOTAL HOOK — shares the SAME cache entry (zero extra network requests)
+// Use this only where you need the real DB count for the bracket.
+// ─────────────────────────────────────────────────────────────────────────────
+export function useFleetServerTotal(params?: {
+  search?: string; limit?: number; offset?: number; enabled?: boolean;
+}) {
+  const user = useAuthStore((s) => s.user);
+  return useQuery({
+    ...buildQueryOptions(user, params),
+    select: (raw: FleetRaw): number => raw.serverTotal,
   });
 }

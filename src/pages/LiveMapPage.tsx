@@ -30,9 +30,12 @@ export default function LiveMapPage() {
   const { data: positions = [] } = useLatestPositions();
   const { data: alerts = [] }    = useAlerts();
 
+  // ✅ FIX: was 3 min — now matches FleetSidebar (15 min) and TopBar (15 min)
+  //    so the Fleet tab badge shows the same online count as the sidebar.
+  const ONLINE_THRESHOLD_MS = 15 * 60_000;
   const onlineCount = positions.filter((p: any) => {
     if (!p.receivedAt) return false;
-    return Date.now() - new Date(p.receivedAt).getTime() < 3 * 60_000;
+    return Date.now() - new Date(p.receivedAt).getTime() < ONLINE_THRESHOLD_MS;
   }).length;
 
   const alertCount = Array.isArray(alerts) ? alerts.length : 0;

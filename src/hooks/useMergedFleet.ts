@@ -1,12 +1,11 @@
-import { useEffect } from "react";
 import { useFleetDevices } from "@/hooks/useFleetDevices";
 import { useLatestPositions } from "@/hooks/useLatestPositions";
 
 /**
- * Preloads vehicles and positions into react-query cache.
- * Call once at page level — no return value needed.
+ * SAFE preloader
+ * Only enable when explicitly needed
  */
-export function useMergedFleet() {
-  useFleetDevices();
-  useLatestPositions();
+export function useMergedFleet(enabled: boolean = false) {
+  useFleetDevices({ enabled });
+  useLatestPositions({ enabled });
 }

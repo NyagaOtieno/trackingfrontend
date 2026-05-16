@@ -28,11 +28,13 @@ function safeArray<T>(input: any): T[] {
   return [];
 }
 
+const ONLINE_THRESHOLD_MS = 15 * 60 * 1_000; // matches FleetSidebar
+
 function isOnline(receivedAt?: string | null) {
   if (!receivedAt) return false;
   const time = new Date(receivedAt).getTime();
   if (Number.isNaN(time)) return false;
-  return Date.now() - time < 10 * 60 * 1000;
+  return Date.now() - time < ONLINE_THRESHOLD_MS;
 }
 
 function getUserDisplayName(user: any) {
@@ -48,21 +50,27 @@ export function TopBar() {
   const positionsQuery = useLatestPositions();
   const alertsQuery    = useAlerts();
 
-  const devices   = useMemo(() => safeArray<any>(devicesQuery?.data),   [devicesQuery.data]);
+  const devices     = useMemo(() => safeArray<any>(devicesQuery?.data?.devices ?? devicesQuery?.data),   [devicesQuery.data]);
+  const serverTotal = (devicesQuery?.data as any)?.serverTotal ?? devices.length;
   const positions = useMemo(() => safeArray<any>(positionsQuery?.data),  [positionsQuery.data]);
   const alerts    = useMemo(() => safeArray<any>(alertsQuery?.data),     [alertsQuery.data]);
 
   const stats = useMemo(() => {
-    const latestMap = new Map<string, any>();
+    const latestByUid = new Map<string, any>();
+    const latestByVehicleId = new Map<number, any>();
     for (const p of positions) {
-      if (p?.deviceUid) latestMap.set(p.deviceUid, p);
+      if (p?.deviceUid) latestByUid.set(p.deviceUid, p);
+      if (p?.vehicleId && p.vehicleId !== 0) latestByVehicleId.set(Number(p.vehicleId), p);
     }
     let online = 0;
     for (const d of devices) {
-      const pos = latestMap.get(d.deviceUid);
+      const pos =
+        latestByUid.get(d.deviceUid) ||
+        (d.id        ? latestByVehicleId.get(d.id)        : undefined) ||
+        (d.vehicleId ? latestByVehicleId.get(d.vehicleId) : undefined);
       if (isOnline(pos?.receivedAt)) online++;
     }
-    const total = devices.length;
+    const total = serverTotal || devices.length;
     return { total, online, offline: Math.max(0, total - online), alerts: alerts.length, selected: selectedDeviceUid ? 1 : 0 };
   }, [devices, positions, alerts, selectedDeviceUid]);
 

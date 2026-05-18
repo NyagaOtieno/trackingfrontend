@@ -41,7 +41,8 @@ export const FleetCard = memo(function FleetCard({ vehicle }: FleetCardProps) {
   "Unknown Vehicle";
 
   return (
-    <button
+        <button
+      data-uid={vehicle.deviceUid}
       type="button"
       onClick={handleClick}
       className={`relative w-full overflow-hidden rounded-xl border px-3 py-3 text-left transition-all ${
